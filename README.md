@@ -6,5 +6,10 @@ Using Lemonene on sponge/in refillable marker to pop the balloons
 
 Link to Library Arman is using: https://github.com/Virodroid/easyTello
 
+## Setup
+Install dependencies:
+`pip install -r requirements.txt`
 
+Run program:
+`python main.py`
 
