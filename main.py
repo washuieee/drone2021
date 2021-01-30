@@ -1,13 +1,19 @@
 from easytello import tello
 
-drone = tello.Tello()
+from drone import Drone
 
-drone.streamon()
 
-drone.takeoff()
+def main():
 
-for i in range(4):
-    drone.forward(20)
-    drone.cw(50)
+    tempname = Drone()
+    tempname.start()
 
-drone.land()
+    for i in range(4):
+        tempname.drone.forward(20)
+        tempname.drone.cw(50)
+
+    tempname.drone.land()
+
+
+if __name__ == "__main__":
+    main()
