@@ -8,8 +8,8 @@ Link to Library Arman is using: https://github.com/Virodroid/easyTello
 
 ## Setup
 Install dependencies:
-`pip install -r requirements.txt`
+`pip3 install -r requirements.txt`
 
 Run program:
-`python main.py`
+`python3 control.py`
 
