@@ -4,7 +4,7 @@ import multiprocessing as mp
 import queue
 import platform
 import subprocess
-
+import time
 import vision
 
 def droneloop():
@@ -22,19 +22,46 @@ def droneloop():
     drone.send_command('streamon')
 
     # Start the vision subprocess
-    q = mp.Queue()
+    q = mp.Queue(maxsize=1)
     p = mp.Process(target=vision.start, args=(q, order))
     p.start()
 
+    drone.takeoff()
+    start_time = time.time()
+
     # Main control loop
     while True:
+        current_time = time.time()
         try:
             data = q.get(True, 1.0)
             print("got data")
+            if data['red'] is not None:
+                x, y = data['red']
+                print(f"Red balloon at {data['red']}")
+                xrot = x / 960 * 82.6
+                print(xrot)
+                if xrot < -2:
+                    drone.ccw(int(abs(xrot)))
+                elif xrot > 2:
+                    drone.cw(int(abs(xrot)))
+                else:
+                    print("Right on target")
+                    drone.forward(50)
+                time.sleep(2)
+                # we went to sleep, so ignore the stale vision frame
+                q.get(False)
             if data['type'] == 'quit':
                 break;
         except queue.Empty:
             print("no new vision data")
+        except KeyboardInterrupt:
+            print("Graceful shutdown!")
+            break
+        if current_time - start_time > 20:
+            break
+
+    drone.land()
+        
 
     print('Cleaning up')
     drone.send_command('streamoff')

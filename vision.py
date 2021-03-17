@@ -2,6 +2,7 @@ from easytello import tello
 import time
 import cv2
 import threading
+import queue
 
 
 class Vision:
@@ -23,31 +24,53 @@ class Vision:
             self.current_target = self.response[self.current_target_index]
 
 
-def start(queue, order):
+def start(q, order):
     # Start UDP server to receive video from Tello
     cap = cv2.VideoCapture('udp://192.168.10.1:11111')
     i = 0
 
-    # Main vision loop
-    while cap.isOpened():
-        # Read image
-        ret, frame = cap.read()
+    try:
+        # Main vision loop
+        while cap.isOpened():
+            # Read image
+            ret, frame = cap.read()
 
-        # Processing...
+            results = {'type': 'data', 'red': None, 'green': None, 'blue': None, 'yellow': None}
 
-        # Send results to control loop
-        queue.put({'type': 'data', 'red': None, 'green': None, 'blue': None, 'yellow': None})
+            # Processing...
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            thresh1 = cv2.bitwise_or(
+                    cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
+                    cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
+            contours, hierarchy = cv2.findContours(
+                    thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            filtered = [c for c in contours if cv2.contourArea(c) > 1000]
+            if len(filtered) > 0:
+                contour = max(filtered, key=lambda c: cv2.contourArea(c))
+                mu = cv2.moments(contour)
+                x = int(mu['m10'] / mu['m00']) - frame.shape[1]//2
+                y = -int(mu['m01'] / mu['m00']) + frame.shape[0]//2
+                results['red'] = (x, y)
 
-        # Debugging client display
-        cv2.imshow('Image', frame)
-        key = cv2.waitKey(1) & 0xFF
-        # Quit early if user presses ESC on the window
-        if key == 27:
-            break
-        # Save a screenshot if the user presses SPACEBAR on the window
-        if key == 32:
-            cv2.imwrite(f'img_{i:05d}.jpg', frame)
-            i += 1
+
+            # Send results to control loop
+            try:
+                q.put(results, block=False)
+            except queue.Full:
+                pass
+
+            # Debugging client display
+            cv2.imshow('Image', frame)
+            key = cv2.waitKey(1) & 0xFF
+            # Quit early if user presses ESC on the window
+            if key == 27:
+                break
+            # Save a screenshot if the user presses SPACEBAR on the window
+            if key == 32:
+                cv2.imwrite(f'img_{i:05d}.jpg', frame)
+                i += 1
+    except KeyboardInterrupt:
+        print("Vision exiting")
 
     cap.release()
     queue.put({'type': 'quit'})
