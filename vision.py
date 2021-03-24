@@ -7,9 +7,10 @@ import queue
 import time
 
 
-def start(q, order):
+def start(q, order, source='udp://192.168.10.1:11111'):
     # Start UDP server to receive video from Tello
-    cap = cv2.VideoCapture('udp://192.168.10.1:11111')
+    cap = cv2.VideoCapture(source)
+    out = None
     i = 0
 
     cv2.namedWindow("Display")
@@ -19,7 +20,12 @@ def start(q, order):
         while cap.isOpened():
             # Read image
             ret, frame = cap.read()
+            if out is None and '.avi' not in source:
+                out = cv2.VideoWriter(f"{time.time()}.avi",
+                        cv2.VideoWriter_fourcc("M","J","P","G"), 30, (960, 720), True)
 
+            if out is not None:
+                out.write(frame)
             process(q, frame)
 
             key = cv2.waitKey(1) & 0xFF
@@ -34,8 +40,9 @@ def start(q, order):
         print("Vision exiting")
 
     cap.release()
+    out.release()
     cv2.destroyAllWindows()
-    q.put({'type': 'quit'})
+    q.put({'type': 'quit'}, timeout=5)
 
 
 last_frame_time = None
