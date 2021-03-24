@@ -70,12 +70,15 @@ def process(q, frame):
     if last_frame_time is not None:
         interframe = now - last_frame_time
         fps = int(1/interframe)
-        cv2.putText(display, f"{fps}FPS", (20,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+        cv2.putText(display, f"{fps}FPS - Press ESC to land drone and exit",
+                (20,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
     last_frame_time = now
     cv2.imshow('Display', display)
 
 
 CONTOUR_MIN_AREA = 1000
+BALLOON_CENTER_DIAMETER_CM = 33.422  # circ 105cm
+FOCAL_LENGTH_PX = 711  # curve fit result
 def track_balloon(thresh, debug):
     # Find contours in binary image
     contours, hierarchy = cv2.findContours(
@@ -89,20 +92,27 @@ def track_balloon(thresh, debug):
         cy = int(mu['m01'] / mu['m00'])
         x = cx - thresh.shape[1]//2
         y = -cy + thresh.shape[0]//2
-
+        # find the rotation (in degrees) from camera center to target
         xrot = x / thresh.shape[1] * 82.6
         yrot = y / thresh.shape[0] * 82.6
-
-        rect = cv2.minAreaRect(contour)
+        # find distance to target
+        rect = cv2.fitEllipse(contour)
         box = cv2.boxPoints(rect)
         box = np.int0(box)
+        center, size, angle = rect
+        minoraxis = min(size)  # need a good shot of the balloon for this to make sense
+        distance = (BALLOON_CENTER_DIAMETER_CM * FOCAL_LENGTH_PX) / minoraxis
+        # find the height of the balloon (center vs camera center)
+        height = distance * np.sin(yrot)
 
         if debug is not None:
             cv2.drawContours(debug, [contour], 0, (255,0,255), 3)
             cv2.drawContours(debug, [box], 0, (127,0,127), 1)
-            cv2.putText(debug, f"{xrot:.1f}deg, ", (cx,cy), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+            cv2.putText(debug, f"XR {xrot:.1f}deg", (cx-50,cy-20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+            cv2.putText(debug, f"D {distance:.1f}cm", (cx-50,cy), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+            cv2.putText(debug, f"H {height:.1f}cm", (cx-50,cy+20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
 
-        return xrot, yrot
+        return xrot, height, distance
 
     else:
         return None

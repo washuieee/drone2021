@@ -45,28 +45,44 @@ def droneloop():
     while True:
         current_time = time.time()
         try:
+            # get new vision data (wait)
             data = q.get(True, 1.0)
-            if 'yellow' in data.keys() and data['yellow'] is not None:
-                xrot, y = data['yellow']
-                print(f"Yellow balloon at {data['yellow']}")
-                print(y)
-                print(xrot)
-                if y < -3: #IF BALLOON IS BELOW DRONE GO UP 15cm
-                    drone.down(35)
-                    drone.up(20)
-                elif y > 3: #IF BALLOON IS ABOVE DRONE GO UP 15cm
-                    drone.up(35)
-                    drone.down(20)
-                elif xrot < -6:
+
+            # find a balloon, any balloon, to track
+            track = None
+            colors = ['red', 'green', 'blue', 'yellow']
+            for color in colors:
+                if color in data.keys() and data[color] is not None:
+                    track = data[color]
+                    break
+
+            # align ourselves with the balloon
+            if track is not None:
+                xrot, height, distance = track
+                # rotate to face the balloon if needed
+                if xrot < -6:
+                    # every drone actuation command blocks until the drone finishes moving
                     drone.ccw(int(abs(xrot)))
                 elif xrot > 6:
                     drone.cw(int(abs(xrot)))
+                # change elevation to match balloon if needed
+                elif height < -20:
+                    drone.up(int(abs(height)))
+                elif height > 20:
+                    drone.down(int(abs(height)))
+                # head in for the kill
+                elif distance > 100:
+                    drone.forward(100)
+                elif distance > 20:
+                    drone.forward(int(abs(distance)))
                 else:
-                    print("Right on target")
-                    drone.forward(50)
-                time.sleep(2)
-                # we went to sleep, so ignore the stale vision frame
+                    drone.forward(20)
+                # sleep briefly so vision doesn't get motion blur
+                time.sleep(1)
+                # ignore the stale vision frame
                 q.get(False)
+
+            # quit by pressing ESC on vision window
             if data['type'] == 'quit':
                 break;
         except queue.Empty:
