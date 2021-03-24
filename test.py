@@ -7,9 +7,6 @@ import subprocess
 import time
 import vision
 
-# Make the drone land after 20 seconds in case it went rogue
-EXPERIMENT_TIMEOUT = 20
-
 def droneloop():
     # Get the configuration for this match
     order = input('Input balloon popping order e.g. RGBY  >')
@@ -29,58 +26,25 @@ def droneloop():
     p = mp.Process(target=vision.start, args=(q, order))
     p.start()
 
-    bat = drone.get_battery()
-    print(f"Battery level: {bat}")
-
     # Wait a bit for vision to stabilize
     time.sleep(10)
 
-    drone.takeoff()
     start_time = time.time()
-
-    time.sleep(1)
-    q.get(False)
 
     # Main control loop
     while True:
         current_time = time.time()
         try:
             data = q.get(True, 1.0)
-            if 'yellow' in data.keys() and data['yellow'] is not None:
-                xrot, y = data['yellow']
-                print(f"Yellow balloon at {data['yellow']}")
-                print(y)
-                print(xrot)
-                if y < -3: #IF BALLOON IS BELOW DRONE GO UP 15cm
-                    drone.down(35)
-                    drone.up(20)
-                elif y > 3: #IF BALLOON IS ABOVE DRONE GO UP 15cm
-                    drone.up(35)
-                    drone.down(20)
-                elif xrot < -6:
-                    drone.ccw(int(abs(xrot)))
-                elif xrot > 6:
-                    drone.cw(int(abs(xrot)))
-                else:
-                    print("Right on target")
-                    drone.forward(50)
-                time.sleep(2)
-                # we went to sleep, so ignore the stale vision frame
-                q.get(False)
+            print(data)
             if data['type'] == 'quit':
                 break;
         except queue.Empty:
-            print("Vision is not responding")
+            print("no new vision data")
         except KeyboardInterrupt:
             print("Graceful shutdown!")
             break
-        if current_time - start_time > EXPERIMENT_TIMEOUT:
-            print("Experiment timed out")
-            break
 
-    print('Landing drone')
-    drone.land()
-        
 
     print('Cleaning up')
     drone.send_command('streamoff')

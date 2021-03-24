@@ -1,27 +1,10 @@
 from easytello import tello
 import time
 import cv2
+import numpy as np
 import threading
 import queue
-
-
-class Vision:
-    def __init__(self):
-        #self.response = input('Input order of balloons to pop e.g. RGBY')
-        self.current_target_index = 0
-        #self.current_target = self.response[0]
-        target_color = {  # in BGR values
-            'R': ((0, 0, 200), (50, 50, 255)),
-            'B': ((200, 0, 0), (255, 50, 50)),
-            'Y': ((0, 200, 200), (50, 255, 255)),
-            'G': ((0, 200, 0), (50, 255, 50))
-        }
-
-
-    def switchtarget(self):
-        if self.current_target_index < len(self.response):
-            self.current_target_index += 1
-            self.current_target = self.response[self.current_target_index]
+import time
 
 
 def start(q, order):
@@ -29,58 +12,16 @@ def start(q, order):
     cap = cv2.VideoCapture('udp://192.168.10.1:11111')
     i = 0
 
+    cv2.namedWindow("Display")
+
     try:
         # Main vision loop
         while cap.isOpened():
             # Read image
             ret, frame = cap.read()
 
-            results = {'type': 'data', 'red': None, 'green': None, 'blue': None, 'yellow': None}
+            process(q, frame)
 
-            # Processing...
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            thresh1 = cv2.bitwise_or(
-                    cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
-                    cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
-            contours, hierarchy = cv2.findContours(
-                    thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            filtered = [c for c in contours if cv2.contourArea(c) > 1000]
-            if len(filtered) > 0:
-                contour = max(filtered, key=lambda c: cv2.contourArea(c))
-                # find the center of the balloon
-                mu = cv2.moments(contour)
-                x = int(mu['m10'] / mu['m00']) - frame.shape[1]//2
-                y = -int(mu['m01'] / mu['m00']) + frame.shape[0]//2
-
-                xrot = x / 960 * 82.6
-                yrot = y / 720 * 82.6
-
-                results['red'] = (xrot, yrot)
-
-            thresh3 = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
-            contours, hierarchy = cv2.findContours(
-                    thresh3, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            filtered = [c for c in contours if cv2.contourArea(c) > 1000]
-            if len(filtered) > 0:
-                contour = max(filtered, key=lambda c: cv2.contourArea(c))
-                # find the center of the balloon
-                mu = cv2.moments(contour)
-                x = int(mu['m10'] / mu['m00']) - frame.shape[1]//2
-                y = -int(mu['m01'] / mu['m00']) + frame.shape[0]//2
-
-                xrot = x / 960 * 82.6
-                yrot = y / 720 * 82.6
-
-                results['yellow'] = (xrot, yrot)
-
-            # Send results to control loop
-            try:
-                q.put(results, block=False)
-            except queue.Full:
-                pass
-
-            # Debugging client display
-            cv2.imshow('Image', frame)
             key = cv2.waitKey(1) & 0xFF
             # Quit early if user presses ESC on the window
             if key == 27:
@@ -93,5 +34,75 @@ def start(q, order):
         print("Vision exiting")
 
     cap.release()
+    cv2.destroyAllWindows()
     q.put({'type': 'quit'})
 
+
+last_frame_time = None
+def process(q, frame):
+    global last_frame_time
+    # Processing...
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    threshR = cv2.bitwise_or(
+            cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
+            cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
+    threshG = cv2.inRange(hsv, (45-10, 50, 100), (45+10, 200, 255))
+    threshB = cv2.inRange(hsv, (105-10, 150, 0), (105+10, 255, 255))
+    threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
+
+    display = frame.copy()
+    results = {
+            'type': 'data',
+            'red': track_balloon(threshR, display),
+            'green': track_balloon(threshG, display),
+            'blue': track_balloon(threshB, display),
+            'yellow': track_balloon(threshY, display),
+            }
+
+    # Send results to control loop
+    try:
+        q.put(results, block=False)
+    except queue.Full:
+        pass
+
+    # Debugging client display
+    now = time.time()
+    if last_frame_time is not None:
+        interframe = now - last_frame_time
+        fps = int(1/interframe)
+        cv2.putText(display, f"{fps}FPS", (20,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+    last_frame_time = now
+    cv2.imshow('Display', display)
+
+
+CONTOUR_MIN_AREA = 1000
+def track_balloon(thresh, debug):
+    # Find contours in binary image
+    contours, hierarchy = cv2.findContours(
+            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    filtered = [c for c in contours if cv2.contourArea(c) > CONTOUR_MIN_AREA]
+    if len(filtered) > 0:
+        contour = max(filtered, key=lambda c: cv2.contourArea(c))
+        # find the center of the balloon
+        mu = cv2.moments(contour)
+        cx = int(mu['m10'] / mu['m00'])
+        cy = int(mu['m01'] / mu['m00'])
+        x = cx - thresh.shape[1]//2
+        y = -cy + thresh.shape[0]//2
+
+        xrot = x / thresh.shape[1] * 82.6
+        yrot = y / thresh.shape[0] * 82.6
+
+        rect = cv2.minAreaRect(contour)
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
+
+        if debug is not None:
+            cv2.drawContours(debug, [contour], 0, (255,0,255), 3)
+            cv2.drawContours(debug, [box], 0, (127,0,127), 1)
+            cv2.putText(debug, f"{xrot:.1f}deg, ", (cx,cy), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+
+        return xrot, yrot
+
+    else:
+        return None
