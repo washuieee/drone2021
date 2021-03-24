@@ -49,10 +49,13 @@ def droneloop():
                 print(f"Yellow balloon at {data['yellow']}")
                 print(xrot)
                 print(y)
+                
                 if y < -3:
-                    drone.down(20)
-                elif y > 3:
+                    drone.down(35)
                     drone.up(20)
+                elif y > 3:
+                    drone.up(35)
+                    drone.down(20)
                 elif xrot < -6:
                     drone.ccw(int(abs(xrot)))
                 elif xrot > 6:
