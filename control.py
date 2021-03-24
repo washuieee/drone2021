@@ -44,18 +44,18 @@ def droneloop():
         try:
             data = q.get(True, 1.0)
             print("got data")
-            if 'red' in data.keys() and data['red'] is not None:
-                xrot, y = data['red']
-                print(f"Red balloon at {data['red']}")
+            if 'yellow' in data.keys() and data['yellow'] is not None:
+                xrot, y = data['yellow']
+                print(f"Yellow balloon at {data['yellow']}")
                 print(xrot)
                 print(y)
-                if y > 3:
-		    drone.down(15)
                 if y < -3:
-		    drone.up(15)
-                if xrot < -2:
+                    drone.down(20)
+                elif y > 3:
+                    drone.up(20)
+                elif xrot < -6:
                     drone.ccw(int(abs(xrot)))
-                elif xrot > 2:
+                elif xrot > 6:
                     drone.cw(int(abs(xrot)))
                 else:
                     print("Right on target")
