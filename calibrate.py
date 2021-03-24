@@ -50,7 +50,9 @@ while cap.isOpened():
             break
 
 cv2.destroyAllWindows()
-
+imgpoints = imgpoints[::10]
+objpoints = objpoints[::10]
+print(f"Starting calibration with {len(objpoints)} object pts")
 retval, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
 print("Camera matrix")
 print(cameraMatrix)
