@@ -50,9 +50,9 @@ def droneloop():
                 print(xrot)
                 print(y)
                 if y > 3:
-			        drone.down(15)
+		    drone.down(15)
                 if y < -3:
-			        drone.up(15)
+		    drone.up(15)
                 if xrot < -2:
                     drone.ccw(int(abs(xrot)))
                 elif xrot > 2:
