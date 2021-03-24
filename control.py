@@ -26,8 +26,17 @@ def droneloop():
     p = mp.Process(target=vision.start, args=(q, order))
     p.start()
 
+    bat = drone.get_battery()
+    print(f"Battery level: {bat}")
+
+    # Wait a bit for vision to stabilize
+    time.sleep(10)
+
     drone.takeoff()
     start_time = time.time()
+
+    time.sleep(1)
+    q.get(False)
 
     # Main control loop
     while True:
@@ -35,10 +44,9 @@ def droneloop():
         try:
             data = q.get(True, 1.0)
             print("got data")
-            if data['red'] is not None:
-                x, y = data['red']
+            if 'red' in data.keys() and data['red'] is not None:
+                xrot, y = data['red']
                 print(f"Red balloon at {data['red']}")
-                xrot = x / 960 * 82.6
                 print(xrot)
                 if xrot < -2:
                     drone.ccw(int(abs(xrot)))
@@ -60,12 +68,15 @@ def droneloop():
         if current_time - start_time > 20:
             break
 
+    print('Experiment timed out, landing drone')
     drone.land()
         
 
     print('Cleaning up')
     drone.send_command('streamoff')
-    p.join()
+
+    # Stop vision
+    p.terminate()
 
 
 def ping(host):

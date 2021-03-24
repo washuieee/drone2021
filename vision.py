@@ -47,10 +47,14 @@ def start(q, order):
             filtered = [c for c in contours if cv2.contourArea(c) > 1000]
             if len(filtered) > 0:
                 contour = max(filtered, key=lambda c: cv2.contourArea(c))
+                # find the center of the balloon
                 mu = cv2.moments(contour)
                 x = int(mu['m10'] / mu['m00']) - frame.shape[1]//2
                 y = -int(mu['m01'] / mu['m00']) + frame.shape[0]//2
-                results['red'] = (x, y)
+
+                xrot = x / 960 * 82.6
+
+                results['red'] = (xrot, 0)
 
 
             # Send results to control loop
@@ -73,5 +77,5 @@ def start(q, order):
         print("Vision exiting")
 
     cap.release()
-    queue.put({'type': 'quit'})
+    q.put({'type': 'quit'})
 
