@@ -53,7 +53,7 @@ def process(q, frame):
     threshR = cv2.bitwise_or(
             cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
             cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
-    threshG = cv2.inRange(hsv, (45-10, 50, 100), (45+10, 200, 255))
+    threshG = cv2.inRange(hsv, (75-10, 50, 100), (75+10, 200, 255))
     threshB = cv2.inRange(hsv, (105-10, 150, 0), (105+10, 255, 255))
     threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
 
