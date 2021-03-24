@@ -47,15 +47,15 @@ def droneloop():
             if 'yellow' in data.keys() and data['yellow'] is not None:
                 xrot, y = data['yellow']
                 print(f"Yellow balloon at {data['yellow']}")
-                print(xrot)
                 print(y)
-                
-                if y < -3:
-                    drone.down(35)
-                    drone.up(20)
-                elif y > 3:
-                    drone.up(35)
-                    drone.down(20)
+                print(xrot)
+                while y < -3 || y > 3:
+                    if y < -3: #IF BALLOON IS BELOW DRONE GO UP 15cm
+                        drone.down(35)
+                        drone.up(20)
+                    elif y > 3: #IF BALLOON IS ABOVE DRONE GO UP 15cm
+                        drone.up(35)
+                        drone.down(20)
                 elif xrot < -6:
                     drone.ccw(int(abs(xrot)))
                 elif xrot > 6:
