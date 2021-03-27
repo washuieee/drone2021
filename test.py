@@ -8,9 +8,6 @@ import time
 import vision
 
 def droneloop():
-    # Get the configuration for this match
-    order = input('Input balloon popping order e.g. RGBY  >')
-
     # Wait for the user to switch WiFi networks
     while ping('192.168.10.1') == False:
         print('Drone is offline, retrying...')
@@ -19,12 +16,15 @@ def droneloop():
     # Connect to Tello
     drone = tello.Tello()
     drone.command()
-    drone.send_command('streamon')
 
     # Start the vision subprocess
     q = mp.Queue(maxsize=1)
-    p = mp.Process(target=vision.start, args=(q, order))
+    p = mp.Process(target=vision.start, args=(q, None))
     p.start()
+
+    time.sleep(0.2)
+
+    drone.send_command('streamon')
 
     # Wait a bit for vision to stabilize
     time.sleep(10)

@@ -8,7 +8,7 @@ import time
 import vision
 
 # Make the drone land after 20 seconds in case it went rogue
-EXPERIMENT_TIMEOUT = 20
+EXPERIMENT_TIMEOUT = 60*3
 
 def droneloop():
     # Get the configuration for this match
@@ -32,13 +32,18 @@ def droneloop():
     bat = drone.get_battery()
     print(f"Battery level: {bat}")
 
+
     # Wait a bit for vision to stabilize
     time.sleep(10)
 
     drone.takeoff()
+    time.sleep(1)
+
+    drone.up(150)
+
     start_time = time.time()
 
-    time.sleep(1)
+    time.sleep(3)
     q.get(False)
 
     # Main control loop
@@ -48,16 +53,17 @@ def droneloop():
             # get new vision data (wait)
             data = q.get(True, 1.0)
 
-            # find a balloon, any balloon, to track
-            track = None
+            # quit by pressing ESC on vision window
+            if data['type'] == 'quit':
+                break;
+
             colors = ['red', 'green', 'blue', 'yellow']
-            for color in colors:
-                if color in data.keys() and data[color] is not None:
-                    track = data[color]
-                    break
+            # track the closest balloon
+            balloons = [data[color] for color in colors if data[color] is not None]
 
             # align ourselves with the balloon
-            if track is not None:
+            if len(balloons) > 0:
+                track = min(balloons, key=lambda t: t[2])
                 xrot, height, distance = track
                 # rotate to face the balloon if needed
                 if xrot < -6:
@@ -67,9 +73,9 @@ def droneloop():
                     drone.cw(int(abs(xrot)))
                 # change elevation to match balloon if needed
                 elif height < -20:
-                    drone.up(int(abs(height)))
+                    drone.down(max(int(abs(height * 0.75)), 20))
                 elif height > 20:
-                    drone.down(int(abs(height)))
+                    drone.up(max(int(abs(height * 0.75)), 20))
                 # head in for the kill
                 elif distance > 100:
                     drone.forward(100)
@@ -78,13 +84,10 @@ def droneloop():
                 else:
                     drone.forward(20)
                 # sleep briefly so vision doesn't get motion blur
-                time.sleep(1)
+                time.sleep(3)
                 # ignore the stale vision frame
                 q.get(False)
 
-            # quit by pressing ESC on vision window
-            if data['type'] == 'quit':
-                break;
         except queue.Empty:
             print("Vision is not responding")
         except KeyboardInterrupt:
