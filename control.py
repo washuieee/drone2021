@@ -14,6 +14,16 @@ def droneloop():
     # Get the configuration for this match
     order = input('Input balloon popping order e.g. RGBY  >')
 
+
+    letterMap = {
+        "r": "red",
+        "g": "green",
+        "b": "blue",
+        "y": "yellow"
+    }
+
+    remainingBalloons = list(map(lambda i : letterMap[i], list(order)))
+    
     # Wait for the user to switch WiFi networks
     while ping('192.168.10.1') == False:
         print('Drone is offline, retrying...')
@@ -39,7 +49,7 @@ def droneloop():
     drone.takeoff()
     time.sleep(1)
 
-    drone.up(150)
+    drone.up(80)
 
     start_time = time.time()
 
@@ -48,6 +58,7 @@ def droneloop():
 
     # Main control loop
     while True:
+        print(remainingBalloons)
         current_time = time.time()
         try:
             # get new vision data (wait)
@@ -59,12 +70,12 @@ def droneloop():
 
             colors = ['red', 'green', 'blue', 'yellow']
             # track the closest balloon
-            balloons = [data[color] for color in colors if data[color] is not None]
+
+            balloon = data[remainingBalloons[0]]
 
             # align ourselves with the balloon
-            if len(balloons) > 0:
-                track = min(balloons, key=lambda t: t[2])
-                xrot, height, distance = track
+            if balloon is not None:
+                xrot, height, distance = balloon
                 # rotate to face the balloon if needed
                 if xrot < -6:
                     # every drone actuation command blocks until the drone finishes moving
@@ -84,9 +95,12 @@ def droneloop():
                 else:
                     drone.forward(20)
                 # sleep briefly so vision doesn't get motion blur
-                time.sleep(3)
                 # ignore the stale vision frame
                 q.get(False)
+            else:
+                drone.cw(30)
+
+            time.sleep(3)
 
         except queue.Empty:
             print("Vision is not responding")
