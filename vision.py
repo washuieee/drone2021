@@ -17,11 +17,18 @@ def start(q, order, source='udp://192.168.10.1:11111'):
 
     cv2.namedWindow("Display")
 
+    frame_skip = 300
+
     try:
         # Main vision loop
         while cap.isOpened():
             # Read image
             ret, frame = cap.read()
+
+            if 0 < frame_skip:
+                frame_skip = frame_skip - 1
+                continue
+            
             if out is None and '.avi' not in source:
                 out = cv2.VideoWriter(f"{time.time()}.avi",
                         cv2.VideoWriter_fourcc("M","J","P","G"), 30, (960, 720), True)
