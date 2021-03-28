@@ -21,12 +21,17 @@ def start(q, order, source='udp://192.168.10.1:11111'):
 
     try:
         # Main vision loop
+        j = 0
         while cap.isOpened():
             # Read image
             ret, frame = cap.read()
 
             if 0 < frame_skip:
                 frame_skip = frame_skip - 1
+                continue
+
+            j = j + 1
+            if j % 4 != 0:
                 continue
             
             if out is None and '.avi' not in source:
