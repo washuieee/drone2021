@@ -1,6 +1,7 @@
 from easytello import tello
 import time
 import cv2
+import av
 import numpy as np
 import threading
 import queue
@@ -9,58 +10,92 @@ import itertools
 import functools
 
 
-def start(q, order, source='udp://192.168.10.1:11111'):
+class Vision(object):
+    def __init__(self, record=True):
+        self.frame_skip = 300
+        if record:
+            self.out = cv2.VideoWriter(f"{time.time()}.avi",
+                    cv2.VideoWriter_fourcc("M","J","P","G"), 30, (960, 720), True)
+
+    def open_input(self, source, retry = 3):
+        self.container = None
+        ave = None
+        while self.container is None and 0 < retry:
+            retry -= 1
+            try:
+                self.container = av.open(source)
+            except av.AVError as ave:
+                print(ave)
+                print('retry...')
+        if self.container is None:
+            raise ave
+        self.stream = self.container.decode(video=0)
+
+    def check_new_frame(self, q, status):
+        frame = next(self.stream)
+        self.new_frame(frame, q, status)
+
+    def new_frame(self, frame, q, status):
+        if 0 < self.frame_skip:
+            self.frame_skip = self.frame_skip - 1
+            return
+
+        image = cv2.cvtColor(np.array(frame.to_image()), cv2.COLOR_RGB2BGR)
+
+        start_time = time.time()
+        if self.out is not None:
+            self.out.write(image)
+
+        results = process(q, image, status)
+        # Send results to control loop
+        try:
+            q.put(results, block=False)
+        except queue.Full:
+            pass
+
+        key = cv2.waitKey(1) & 0xFF
+        # Quit early if user presses ESC on the window
+        if key == 27:
+            q.get(block=False)
+            q.put({'type': 'quit'}, timeout=5)
+        # Save a screenshot if the user presses SPACEBAR on the window
+        if key == 32:
+            cv2.imwrite(f'img_{i:05d}.jpg', image)
+            i += 1
+        # Recalculate frame skip depending on how fast we're going
+        if frame.time_base < 1.0/60:
+            time_base = 1.0/60
+        else:
+            time_base = frame.time_base
+        self.frame_skip = int((time.time() - start_time)/time_base)
+
+
+def start(q, order, source):
     # Start UDP server to receive video from Tello
-    cap = cv2.VideoCapture(source)
     out = None
     i = 0
 
-    cv2.namedWindow("Display")
-
-    frame_skip = 300
 
     try:
         # Main vision loop
-        j = 0
-        while cap.isOpened():
-            # Read image
-            ret, frame = cap.read()
-
-            if 0 < frame_skip:
-                frame_skip = frame_skip - 1
-                continue
-
-            j = j + 1
-            if j % 4 != 0:
-                continue
-            
-            if out is None and '.avi' not in source:
-                out = cv2.VideoWriter(f"{time.time()}.avi",
-                        cv2.VideoWriter_fourcc("M","J","P","G"), 30, (960, 720), True)
-
-            if out is not None:
-                out.write(frame)
-            process(q, frame)
-
-            key = cv2.waitKey(1) & 0xFF
-            # Quit early if user presses ESC on the window
-            if key == 27:
-                break
-            # Save a screenshot if the user presses SPACEBAR on the window
-            if key == 32:
-                cv2.imwrite(f'img_{i:05d}.jpg', frame)
-                i += 1
+        frame_skip = 300
+        running = True
+        cv2.namedWindow("Display")
+        while running:
+            for frame in container.decode(video=0):
+                pass
     except KeyboardInterrupt:
-        print("Vision exiting")
+        print("Vision exiting from CTRL-C")
+    finally:
+        if out is not None:
+            out.release()
+        cv2.destroyAllWindows()
 
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()
     q.put({'type': 'quit'}, timeout=5)
 
 
 last_frame_time = None
-def process(q, frame):
+def process(q, frame, status):
     global last_frame_time
     # Processing...
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -85,11 +120,6 @@ def process(q, frame):
             'yellow': track_balloon(threshY, display),
             }
 
-    # Send results to control loop
-    try:
-        q.put(results, block=False)
-    except queue.Full:
-        pass
 
     # Debugging client display
     now = time.time()
@@ -98,8 +128,13 @@ def process(q, frame):
         fps = int(1/interframe)
         cv2.putText(display, f"{fps}FPS - Press ESC to land drone and exit",
                 (20,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+
+    cv2.putText(display, status,
+            (20,700), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
     last_frame_time = now
     cv2.imshow('Display', display)
+
+    return results
 
 
 CONTOUR_MIN_AREA = 1000
