@@ -1,2 +1,2 @@
-easytello~=0.0.7
 opencv-python~=4.5.1.48
+av~=8.0.3
