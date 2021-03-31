@@ -117,10 +117,20 @@ def droneloop():
         statusmessageui("Video feed starting...")
 
         
-        # Wait for video to stabilize
-        expiry = time.time() + 10 
-        while time.time() < expiry:
+        def dronesleep(t):
+            expiry = time.time() + t
+            while time.time() < expiry:
+                v.check_new_frame(q, status)
+            if q.full():
+                q.get()
             v.check_new_frame(q, status)
+
+        # Wait for video to stabilize
+        dronesleep(10)
+
+        drone.up(20)
+
+        dronesleep(1.5)
 
         print("Initial video stabilization finished...")
 
@@ -149,10 +159,10 @@ def droneloop():
             height_ontarget = False
 
             # Rotate to face the balloon if needed
-            if xrot < -6:
+            if xrot < -3:
                 # Drone actuation commands are now non-blocking
                 drone.counter_clockwise(10)
-            elif xrot > 6:
+            elif xrot > 3:
                 drone.clockwise(10)
             else:
                 drone.clockwise(0)
@@ -169,12 +179,24 @@ def droneloop():
 
             # head in for the kill
             if distance > 100:
+                print('slow', distance)
                 drone.forward(20)
-            else:
+            elif distance > 40:
                 if rot_ontarget and height_ontarget:
                     drone.forward(50)
                 else:
                     drone.forward(0)
+            else:
+                print('final', xrot, height, distance)
+                # final kill
+                drone.forward(75)
+                dronesleep(5)
+                remainingBalloons.pop(0)
+                drone.backward(30)
+                dronesleep(8)
+                drone.up(20)
+                dronesleep(2)
+                drone.up(0)
        
         print("Landing")
         cv2.destroyAllWindows()
