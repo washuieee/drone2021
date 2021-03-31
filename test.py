@@ -1,11 +1,16 @@
-from easytello import tello
+import tellopy
 import cv2
-import multiprocessing as mp
+import numpy as np
 import queue
 import platform
 import subprocess
 import time
 import vision
+import traceback
+
+# Make the drone land after 20 seconds in case it went rogue
+EXPERIMENT_TIMEOUT = 60*3
+
 
 def droneloop():
     # Wait for the user to switch WiFi networks
@@ -13,44 +18,49 @@ def droneloop():
         print('Drone is offline, retrying...')
     print('Connected!')
 
+    status = None
+    def handler(event, sender, data, **args):
+        drone = sender
+        if event is drone.EVENT_FLIGHT_DATA:
+            status = str(data)
+
     # Connect to Tello
-    drone = tello.Tello()
-    drone.command()
+    drone = tellopy.Tello()
 
-    # Start the vision subprocess
-    q = mp.Queue(maxsize=1)
-    p = mp.Process(target=vision.start, args=(q, None))
-    p.start()
+    try:
+        drone.subscribe(drone.EVENT_FLIGHT_DATA, handler)
 
-    time.sleep(0.2)
+        drone.connect()
+        drone.wait_for_connection(60.0)
 
-    drone.send_command('streamon')
+        v = vision.Vision(record=True)
+        q = queue.Queue(maxsize=1)
+        v.open_input(drone.get_video_stream())
 
-    # Wait a bit for vision to stabilize
-    time.sleep(10)
+        
+        # Wait for video to stabilize
+        expiry = time.time() + 10 
+        while time.time() < expiry:
+            v.check_new_frame(q, status)
 
-    start_time = time.time()
+        print("Initial video stabilization finished...")
 
-    # Main control loop
-    while True:
-        current_time = time.time()
-        try:
-            data = q.get(True, 1.0)
-            print(data)
+        # Main control loop
+        while True:
+            # Get vision sol'n
+            while q.empty():
+                v.check_new_frame(q, status)
+            data = q.get()
             if data['type'] == 'quit':
-                break;
-        except queue.Empty:
-            print("no new vision data")
-        except KeyboardInterrupt:
-            print("Graceful shutdown!")
-            break
-
-
-    print('Cleaning up')
-    drone.send_command('streamoff')
-
-    # Stop vision
-    p.terminate()
+                print("ESC")
+                break
+       
+        print("Landing")
+        cv2.destroyAllWindows()
+    except Exception as ex:
+        traceback.print_exc()
+    finally:
+        drone.quit()
 
 
 def ping(host):
