@@ -16,6 +16,8 @@ class Vision(object):
         if record:
             self.out = cv2.VideoWriter(f"{time.time()}.avi",
                     cv2.VideoWriter_fourcc("M","J","P","G"), 30, (960, 720), True)
+        else:
+            self.out = None
 
     def open_input(self, source, retry = 3):
         self.container = None
@@ -98,13 +100,28 @@ last_frame_time = None
 def process(q, frame, status):
     global last_frame_time
     # Processing...
+    frame = cv2.GaussianBlur(frame, (11, 11), 0)
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+#    threshR = cv2.bitwise_or(
+#            cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
+#            cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
+#    threshG = cv2.inRange(hsv, (40, 0, 0), (70, 255, 255))
+#    threshB = cv2.inRange(hsv, (105-10, 150, 0), (105+10, 255, 255))
+#    threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
+    #DUC
     threshR = cv2.bitwise_or(
-            cv2.inRange(hsv, (0, 150, 100), (20, 255, 255)),
+            cv2.inRange(hsv, (0, 150, 100), (10, 255, 255)),
             cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
-    threshG = cv2.inRange(hsv, (40, 0, 0), (70, 255, 255))
-    threshB = cv2.inRange(hsv, (105-10, 150, 0), (105+10, 255, 255))
-    threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
+    threshG = cv2.inRange(hsv, (38, 50, 104), (72, 255, 255))
+    threshB = cv2.inRange(hsv, (102, 150, 100), (119, 255, 255))
+    threshY = cv2.inRange(hsv, (25, 150, 119), (34, 255, 255))
+
+    #kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
+    kernel = np.ones((5,5),np.uint8)
+    threshR = cv2.morphologyEx(threshR, cv2.MORPH_OPEN, kernel)
+    threshG = cv2.morphologyEx(threshG, cv2.MORPH_OPEN, kernel)
+    threshB = cv2.morphologyEx(threshB, cv2.MORPH_OPEN, kernel)
+    threshY = cv2.morphologyEx(threshY, cv2.MORPH_OPEN, kernel)
 
 #    cv2.imshow("Red", threshR)
 #    cv2.imshow("Green", threshG)
@@ -114,10 +131,10 @@ def process(q, frame, status):
     display = frame.copy()
     results = {
             'type': 'data',
-            'red': track_balloon(threshR, display),
-            'green': track_balloon(threshG, display),
-            'blue': track_balloon(threshB, display),
-            'yellow': track_balloon(threshY, display),
+            'red': track_balloon(threshR, display, (0,0,255)),
+            'green': track_balloon(threshG, display, (0,255,0)),
+            'blue': track_balloon(threshB, display, (255,0,0)),
+            'yellow': track_balloon(threshY, display, (0,255,255)),
             }
 
 
@@ -144,11 +161,11 @@ BALLOON_CENTER_DIAMETER_CM = 21  # circ 105cm
 FOCAL_LENGTH_PX = 904  # camera calibration result
 CENTER_X = 480
 CENTER_Y = 200
-def track_balloon(thresh, debug):
+def track_balloon(thresh, debug, color):
     # Find contours in binary image
     contours, hierarchy = cv2.findContours(
             thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(debug, contours, -1, (255,0,0), 1)
+    cv2.drawContours(debug, contours, -1, color, 1)
     # Filtering
     filtered = filter(lambda c: len(c) > 5, contours)
     # Remove small contours
@@ -195,7 +212,7 @@ def track_balloon(thresh, debug):
         if debug is not None:
             cv2.line(debug, (0, CENTER_Y), (debug.shape[1]-1, CENTER_Y), (255,0,255), 1)
             cv2.line(debug, (CENTER_X, 0), (CENTER_X, debug.shape[0]-1), (255,0,255), 1)
-            cv2.drawContours(debug, [contour], 0, (255,0,255), 3)
+            cv2.drawContours(debug, [contour], 0, color, 3)
             cv2.drawContours(debug, [box], 0, (127,0,127), 1)
             cv2.putText(debug, f"XR {xrot:.1f}deg", (cx-50,cy-20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
             cv2.putText(debug, f"D {distance:.1f}cm", (cx-50,cy), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
