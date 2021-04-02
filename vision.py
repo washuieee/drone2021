@@ -108,12 +108,13 @@ def process(q, frame, status):
 #    threshB = cv2.inRange(hsv, (105-10, 150, 0), (105+10, 255, 255))
 #    threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
     #DUC
+    minVal = 60
     threshR = cv2.bitwise_or(
-            cv2.inRange(hsv, (0, 150, 100), (10, 255, 255)),
-            cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
-    threshG = cv2.inRange(hsv, (38, 50, 104), (72, 255, 255))
-    threshB = cv2.inRange(hsv, (102, 150, 100), (119, 255, 255))
-    threshY = cv2.inRange(hsv, (25, 150, 119), (34, 255, 255))
+            cv2.inRange(hsv, (0, 150, minVal), (10, 255, 255)),
+            cv2.inRange(hsv, (160, 150, minVal), (180, 255, 255)))
+    threshG = cv2.inRange(hsv, (38, 50, minVal), (72, 255, 255))
+    threshB = cv2.inRange(hsv, (95, 150, minVal), (119, 255, 255))
+    threshY = cv2.inRange(hsv, (25, 150, minVal), (34, 255, 255))
 
     #kernel = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.uint8)
     kernel = np.ones((5,5),np.uint8)
