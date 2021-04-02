@@ -146,6 +146,7 @@ def process(q, frame, status):
         cv2.putText(display, f"{fps}FPS - Press ESC to land drone and exit",
                 (20,20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
 
+    print(status)
     cv2.putText(display, status,
             (20,700), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
     last_frame_time = now

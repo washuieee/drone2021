@@ -80,6 +80,8 @@ def handlaunchui(drone):
         raise Exception("Early quit")
 
 
+status = None
+
 def droneloop():
     # Get the configuration for this match
     remainingBalloons = orderselectui()
@@ -92,11 +94,11 @@ def droneloop():
 
     statusmessageui("Connecting to drone...")
 
-    status = None
     def handler(event, sender, data, **args):
+        global status
         drone = sender
         if event is drone.EVENT_FLIGHT_DATA:
-            status = str(data)
+            status = data
 
     # Connect to Tello
     drone = tellopy.Tello()
