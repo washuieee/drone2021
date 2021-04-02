@@ -62,8 +62,7 @@ class Vision(object):
             q.put({'type': 'quit'}, timeout=5)
         # Save a screenshot if the user presses SPACEBAR on the window
         if key == 32:
-            cv2.imwrite(f'img_{i:05d}.jpg', image)
-            i += 1
+            cv2.imwrite(f'img_{time.time()}.jpg', image)
         # Recalculate frame skip depending on how fast we're going
         if frame.time_base < 1.0/60:
             time_base = 1.0/60
