@@ -118,23 +118,32 @@ def droneloop():
         handlaunchui(drone)
         statusmessageui("Video feed starting...")
 
-        
+       
+        def droneclear():
+            if q.full():
+                q.get()
+            v.check_new_frame(q, str(status))
+
         def dronesleep(t):
             expiry = time.time() + t
             while time.time() < expiry:
-                v.check_new_frame(q, status)
-            if q.full():
-                q.get()
-            v.check_new_frame(q, status)
+                v.check_new_frame(q, str(status))
+            droneclear()
 
         # Wait for video to stabilize
         dronesleep(10)
 
-        drone.up(20)
+        # Ascend!
+        while status.height < 10:
+            drone.up(20)
+            droneclear()
+        drone.up(0)
 
         dronesleep(1.5)
 
         print("Initial video stabilization finished...")
+
+        last_xrot = 0
 
         # Main control loop
         while len(remainingBalloons) > 0:
@@ -142,18 +151,25 @@ def droneloop():
 
             # Get vision sol'n
             while q.empty():
-                v.check_new_frame(q, status)
+                v.check_new_frame(q, str(status))
             data = q.get()
             if data['type'] == 'quit':
                 print("ESC")
                 break
             elif data[target] is None:
                 print(f"Can't see {target} balloon")
-                # Spin clockwise slowly
                 drone.right(0)
                 drone.forward(0)
-                drone.up(0)
-                drone.clockwise(20)
+                # Spin clockwise slowly (or in the direction of last seen balloon
+                if last_xrot < 0:
+                    drone.counter_clockwise(20)
+                else:
+                    drone.clockwise(20)
+                # Ascend to "10"
+                if status.height < 10:
+                    drone.up(20)
+                else:
+                    drone.up(0)
                 continue
             # Align with balloon
             xrot, height, distance = data[target]
@@ -171,9 +187,9 @@ def droneloop():
                 rot_ontarget = True
 
             # change elevation to match balloon if needed
-            if height < -20:
+            if height < -20: # increase this to favor attacking from bottom
                 drone.down(20)
-            elif height > 20:
+            elif height > 20: # decrease this to favor attacking from top
                 drone.up(20)
             else:
                 drone.up(0)
@@ -183,22 +199,26 @@ def droneloop():
             if distance > 100:
                 print('slow', distance)
                 drone.forward(20)
-            elif distance > 40:
-                if rot_ontarget and height_ontarget:
-                    drone.forward(50)
-                else:
-                    drone.forward(0)
-            else:
+            elif distance > 40 and rot_ontarget and height_ontarget:
+                drone.forward(20)
+            elif rot_ontarget and height_ontarget:
                 print('final', xrot, height, distance)
                 # final kill
-                drone.forward(75)
+                drone.forward(10)
                 dronesleep(5)
                 remainingBalloons.pop(0)
+                # back it up
                 drone.backward(30)
                 dronesleep(8)
-                drone.up(20)
-                dronesleep(2)
+                # Ascend!
+                while status.height < 10:
+                    drone.up(20)
+                    droneclear()
                 drone.up(0)
+            else:
+                drone.forward(0)
+
+            last_xrot = xrot
        
         print("Landing")
         cv2.destroyAllWindows()
