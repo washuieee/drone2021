@@ -176,21 +176,25 @@ def droneloop():
             rot_ontarget = False
             height_ontarget = False
 
+            max_xrot = 4
+            if distance < 50:
+                max_xrot = 8
+
             # Rotate to face the balloon if needed
-            if xrot < -3:
+            if xrot < max_xrot * -1:
                 # Drone actuation commands are now non-blocking
                 drone.counter_clockwise(10)
-            elif xrot > 3:
+            elif xrot > max_xrot:
                 drone.clockwise(10)
             else:
                 drone.clockwise(0)
                 rot_ontarget = True
 
             # change elevation to match balloon if needed
-            if height < -20: # increase this to favor attacking from bottom
-                drone.down(20)
-            elif height > 20: # decrease this to favor attacking from top
-                drone.up(20)
+            if height < -17: # increase this to favor attacking from bottom
+                drone.down(15)
+            elif height > 17: # decrease this to favor attacking from top
+                drone.up(15)
             else:
                 drone.up(0)
                 height_ontarget = True
@@ -208,8 +212,8 @@ def droneloop():
                 dronesleep(5)
                 remainingBalloons.pop(0)
                 # back it up
-                drone.backward(30)
-                dronesleep(8)
+                drone.backward(20)
+                dronesleep(4)
                 # Ascend!
                 while status.height < 10:
                     drone.up(20)

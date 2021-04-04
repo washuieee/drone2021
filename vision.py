@@ -160,7 +160,7 @@ BALLOON_CENTER_DIAMETER_CM = 21  # circ 105cm
 #FOCAL_LENGTH_PX = 711  # curve fit result
 FOCAL_LENGTH_PX = 904  # camera calibration result
 CENTER_X = 480
-CENTER_Y = 200
+CENTER_Y = 150
 def track_balloon(thresh, debug, color):
     # Find contours in binary image
     contours, hierarchy = cv2.findContours(
