@@ -134,7 +134,7 @@ def droneloop():
         dronesleep(10)
 
         # Ascend!
-        while status.height < 10:
+        while status.height < 7:
             drone.up(20)
             droneclear()
         drone.up(0)
@@ -159,7 +159,7 @@ def droneloop():
             elif data[target] is None:
                 print(f"Can't see {target} balloon")
                 drone.right(0)
-                drone.forward(0)
+                drone.forward(5)
                 # Spin clockwise slowly (or in the direction of last seen balloon
                 if last_xrot < 0:
                     drone.counter_clockwise(20)
@@ -176,6 +176,8 @@ def droneloop():
             rot_ontarget = False
             height_ontarget = False
 
+            print('target: ', xrot, height, distance)
+
             max_xrot = 4
             if distance < 50:
                 max_xrot = 8
@@ -183,18 +185,22 @@ def droneloop():
             # Rotate to face the balloon if needed
             if xrot < max_xrot * -1:
                 # Drone actuation commands are now non-blocking
-                drone.counter_clockwise(10)
+                drone.counter_clockwise(20)
             elif xrot > max_xrot:
-                drone.clockwise(10)
+                drone.clockwise(20)
             else:
                 drone.clockwise(0)
                 rot_ontarget = True
 
+            elevSpeeed = 10
+            if distance < 150:
+                elevSpeeed = 25
+
             # change elevation to match balloon if needed
             if height < -17: # increase this to favor attacking from bottom
-                drone.down(15)
+                drone.down(elevSpeeed)
             elif height > 17: # decrease this to favor attacking from top
-                drone.up(15)
+                drone.up(elevSpeeed)
             else:
                 drone.up(0)
                 height_ontarget = True
@@ -208,12 +214,13 @@ def droneloop():
             elif rot_ontarget and height_ontarget:
                 print('final', xrot, height, distance)
                 # final kill
-                drone.forward(10)
+                drone.forward(8)
                 dronesleep(5)
                 remainingBalloons.pop(0)
                 # back it up
                 drone.backward(20)
-                dronesleep(4)
+                dronesleep(2)
+                drone.backward(0)
                 # Ascend!
                 while status.height < 10:
                     drone.up(20)
