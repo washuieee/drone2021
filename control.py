@@ -215,14 +215,14 @@ def droneloop():
                 print('final', xrot, height, distance)
                 # final kill
                 drone.forward(8)
-                dronesleep(5)
+                dronesleep(6)
                 remainingBalloons.pop(0)
                 # back it up
                 drone.backward(20)
                 dronesleep(2)
                 drone.backward(0)
                 # Ascend!
-                while status.height < 10:
+                while status.height < 7:
                     drone.up(20)
                     droneclear()
                 drone.up(0)
