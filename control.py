@@ -212,23 +212,26 @@ def droneloop():
             if distance > 100:
                 print('slow', distance)
                 drone.forward(20)
-            elif distance > 40 and rot_ontarget and height_ontarget:
+            elif distance > 50 and rot_ontarget and height_ontarget:
                 drone.forward(20)
             elif rot_ontarget and height_ontarget:
+                print('\a')
                 print('final', xrot, height, distance)
                 # final kill
-                drone.forward(8)
+                drone.forward(6)
                 dronesleep(6)
                 remainingBalloons.pop(0)
-                # back it up
-                drone.backward(20)
-                dronesleep(2)
-                drone.backward(0)
-                # Ascend!
-                while status.height < 7:
-                    drone.up(20)
-                    droneclear()
-                drone.up(0)
+                
+                if len(remainingBalloons) > 0:
+                    # back it up
+                    drone.backward(20)
+                    dronesleep(1)
+                    drone.backward(0)
+                    # Ascend!
+                    while status.height < resting_height:
+                        drone.up(20)
+                        droneclear()
+                    drone.up(0)
             else:
                 drone.forward(0)
 
