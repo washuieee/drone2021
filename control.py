@@ -110,13 +110,13 @@ def droneloop():
         drone.wait_for_connection(60.0)
 
         statusmessageui("Connected to drone!")
+        handlaunchui(drone)
+        statusmessageui("Video feed starting...")
+
 
         v = vision.Vision(record=True)
         q = queue.Queue(maxsize=1)
         v.open_input(drone.get_video_stream())
-
-        handlaunchui(drone)
-        statusmessageui("Video feed starting...")
 
        
         def droneclear():
