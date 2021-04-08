@@ -83,6 +83,9 @@ def handlaunchui(drone):
 status = None
 
 def droneloop():
+
+    resting_height = 6
+
     # Get the configuration for this match
     remainingBalloons = orderselectui()
    
@@ -134,7 +137,7 @@ def droneloop():
         dronesleep(10)
 
         # Ascend!
-        while status.height < 7:
+        while status.height < resting_height:
             drone.up(20)
             droneclear()
         drone.up(0)
@@ -159,14 +162,14 @@ def droneloop():
             elif data[target] is None:
                 print(f"Can't see {target} balloon")
                 drone.right(0)
-                drone.forward(5)
+                drone.forward(6)
                 # Spin clockwise slowly (or in the direction of last seen balloon
                 if last_xrot < 0:
                     drone.counter_clockwise(20)
                 else:
                     drone.clockwise(20)
                 # Ascend to "10"
-                if status.height < 10:
+                if status.height < resting_height:
                     drone.up(20)
                 else:
                     drone.up(0)
@@ -192,8 +195,8 @@ def droneloop():
                 drone.clockwise(0)
                 rot_ontarget = True
 
-            elevSpeeed = 10
-            if distance < 150:
+            elevSpeeed = 8
+            if distance < 100:
                 elevSpeeed = 25
 
             # change elevation to match balloon if needed
