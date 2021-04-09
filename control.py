@@ -8,6 +8,7 @@ import time
 import vision
 import traceback
 import enum
+import logging
 
 # Make the drone land after 20 seconds in case it went rogue
 EXPERIMENT_TIMEOUT = 60*3
