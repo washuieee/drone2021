@@ -7,6 +7,7 @@ import subprocess
 import time
 import vision
 import traceback
+import enum
 
 # Make the drone land after 20 seconds in case it went rogue
 EXPERIMENT_TIMEOUT = 60*3
@@ -80,9 +81,18 @@ def handlaunchui(drone):
         raise Exception("Early quit")
 
 
+class FinalAttackState(enum.Enum):
+    THRUST = 1
+    REVERSE = 2
+    CONFIRM = 3
+
+
 status = None
 
 def droneloop():
+    logging.basicConfig(filename=f"{time.time()}.txt", filemode='w',
+            level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
+    logger = logging.getLogger(__name__)
 
     resting_height = 6
 
@@ -112,8 +122,10 @@ def droneloop():
         drone.connect()
         drone.wait_for_connection(60.0)
 
+        logger.info("Connected to drone")
         statusmessageui("Connected to drone!")
         handlaunchui(drone)
+        logger.info("Hand launch completed")
         statusmessageui("Video feed starting...")
 
 
@@ -135,18 +147,13 @@ def droneloop():
 
         # Wait for video to stabilize
         dronesleep(10)
-
-        # Ascend!
-        while status.height < resting_height:
-            drone.up(20)
-            droneclear()
-        drone.up(0)
-
-        dronesleep(1.5)
-
-        print("Initial video stabilization finished...")
+        logger.info("Vision presumed stable")
 
         last_xrot = 0
+        final_state = None
+        final_target = None
+        final_timer = 0
+        start_time = time.time()
 
         # Main control loop
         while len(remainingBalloons) > 0:
@@ -156,11 +163,61 @@ def droneloop():
             while q.empty():
                 v.check_new_frame(q, str(status))
             data = q.get()
+
+            # Check for early exit
             if data['type'] == 'quit':
-                print("ESC")
+                logger.info("User initiated shutdown by ESC")
                 break
-            elif data[target] is None:
-                print(f"Can't see {target} balloon")
+
+            logger.info("Vision solutions: "
+                    + ",".join({c for c in {'red','green','blue','yellow'} if data[c] is not None}))
+
+            # Check for final attack state
+            if final_state is not None:
+                logger.info(f"In final attack state {final_state}")
+                if final_state == FinalAttackState.THRUST:
+                    if time.time() < final_timer + 6:
+                        # move forward slowly for 6 seconds
+                        drone.forward(6)
+                    else:
+                        # next state transition
+                        drone.forward(0)
+                        final_state = FinalAttackState.REVERSE
+                        final_timer = time.time()
+
+                elif final_state == FinalAttackState.REVERSE:
+                    if time.time() < final_timer + 1:
+                        # back up quickly for 1 second
+                        drone.backward(20)
+                    else:
+                        # next state transition
+                        drone.backward(0)
+                        final_state = FinalAttackState.CONFIRM
+                        final_timer = time.time()
+
+                elif final_state == FinalAttackState.CONFIRM:
+                    # check vision to make sure we popped it
+                    if data[final_target] is None:
+                        # we did
+                        remainingBalloons.pop(0)
+                        # if this list gets to len 0, then it will land next loop iter
+                    else:
+                        # damn, guess we gotta go for it again
+                        pass
+                    final_state = None
+
+                continue
+
+            # If we only have 20 seconds left, pop whatever we can find
+            if data[target] is None and (time.time() - start_time) > 160:
+                for c in {'red', 'green', 'blue', 'yellow'}:
+                    if data[c] is not None:
+                        target = c
+                        break
+
+            # Check for search state
+            if data[target] is None:
+                logger.info(f"Current target {target} not in sight")
                 drone.right(0)
                 drone.forward(6)
                 # Spin clockwise slowly (or in the direction of last seen balloon
@@ -174,12 +231,13 @@ def droneloop():
                 else:
                     drone.up(0)
                 continue
+
             # Align with balloon
             xrot, height, distance = data[target]
             rot_ontarget = False
             height_ontarget = False
 
-            print('target: ', xrot, height, distance)
+            logger.info(f"Tracking target {target}: xrot={xrot}deg height={height}cm, dist={distance}cm")
 
             max_xrot = 4
             if distance < 50:
@@ -187,7 +245,6 @@ def droneloop():
 
             # Rotate to face the balloon if needed
             if xrot < max_xrot * -1:
-                # Drone actuation commands are now non-blocking
                 drone.counter_clockwise(20)
             elif xrot > max_xrot:
                 drone.clockwise(20)
@@ -210,34 +267,25 @@ def droneloop():
 
             # head in for the kill
             if distance > 100:
-                print('slow', distance)
+                logger.info("Moving forward, 1st stage")
                 drone.forward(20)
             elif distance > 50 and rot_ontarget and height_ontarget:
+                logger.info("Moving forward, locked on")
                 drone.forward(20)
             elif rot_ontarget and height_ontarget:
                 print('\a')
-                print('final', xrot, height, distance)
-                # final kill
-                drone.forward(6)
-                dronesleep(6)
-                remainingBalloons.pop(0)
-                
-                if len(remainingBalloons) > 0:
-                    # back it up
-                    drone.backward(20)
-                    dronesleep(1)
-                    drone.backward(0)
-                    # Ascend!
-                    while status.height < resting_height:
-                        drone.up(20)
-                        droneclear()
-                    drone.up(0)
+                logger.info("Taking the shot")
+                # final kill for 6 seconds
+                final_state = FinalAttackState.THRUST
+                final_timer = time.time()
+                final_target = target
             else:
+                logger.info("Still aligning with target")
                 drone.forward(0)
 
             last_xrot = xrot
-       
-        print("Landing")
+      
+        logger.info("Landing drone")
         cv2.destroyAllWindows()
         drone.right(0)
         drone.forward(0)
@@ -249,6 +297,8 @@ def droneloop():
         traceback.print_exc()
     finally:
         drone.quit()
+
+    logger.info("Connection closed")
 
 
 def ping(host):
