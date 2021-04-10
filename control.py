@@ -89,13 +89,14 @@ class FinalAttackState(enum.Enum):
 
 
 status = None
+DEFAULT_RESTING_HEIGHT = 6
 
 def droneloop():
     logging.basicConfig(filename=f"{time.time()}.txt", filemode='w',
             level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
     logger = logging.getLogger(__name__)
 
-    resting_height = 6
+    resting_height = DEFAULT_RESTING_HEIGHT
 
     # Get the configuration for this match
     remainingBalloons = orderselectui()
@@ -155,6 +156,7 @@ def droneloop():
         final_target = None
         final_timer = 0
         start_time = time.time()
+        search_start = None
 
         # Main control loop
         while len(remainingBalloons) > 0:
@@ -176,10 +178,11 @@ def droneloop():
             # Check for final attack state
             if final_state is not None:
                 logger.info(f"In final attack state {final_state}")
+                resting_height = DEFAULT_RESTING_HEIGHT
                 if final_state == FinalAttackState.THRUST:
                     if time.time() < final_timer + 6:
                         # move forward slowly for 6 seconds
-                        drone.forward(6)
+                        drone.forward(8)
                     else:
                         # next state transition
                         drone.forward(0)
@@ -218,20 +221,31 @@ def droneloop():
 
             # Check for search state
             if data[target] is None:
-                logger.info(f"Current target {target} not in sight")
+                if search_start is None:
+                    search_start = time.time()
+                duration = time.time() - search_start
+                if duration > 15:
+                    resting_height -= 2
+                    search_start = time.time()
+                logger.info(f"Current target {target} not in sight, resting height {resting_height}', searching for {duration}s")
                 drone.right(0)
                 drone.forward(6)
                 # Spin clockwise slowly (or in the direction of last seen balloon
+                rate = 35
                 if last_xrot < 0:
-                    drone.counter_clockwise(20)
+                    drone.counter_clockwise(rate)
                 else:
-                    drone.clockwise(20)
+                    drone.clockwise(rate)
                 # Ascend to "10"
                 if status.height < resting_height:
                     drone.up(20)
+                elif status.height > resting_height:
+                    drone.down(20)
                 else:
                     drone.up(0)
                 continue
+
+            search_start = None
 
             # Align with balloon
             xrot, height, distance = data[target]
@@ -253,7 +267,7 @@ def droneloop():
                 drone.clockwise(0)
                 rot_ontarget = True
 
-            elevSpeeed = 8
+            elevSpeeed = 15
             if distance < 100:
                 elevSpeeed = 25
 

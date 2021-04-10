@@ -1,4 +1,3 @@
-from easytello import tello
 import time
 import cv2
 import av
@@ -8,6 +7,9 @@ import queue
 import time
 import itertools
 import functools
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Vision(object):
@@ -20,21 +22,23 @@ class Vision(object):
             self.out = None
 
     def open_input(self, source, retry = 3):
+        self.source = source
         self.container = None
         ave = None
-        while self.container is None and 0 < retry:
+        while self.container is None:
             retry -= 1
             try:
                 self.container = av.open(source)
             except av.AVError as ave:
-                print(ave)
-                print('retry...')
-        if self.container is None:
-            raise ave
+                logger.exception('Failed to open input')
         self.stream = self.container.decode(video=0)
 
     def check_new_frame(self, q, status):
-        frame = next(self.stream)
+        try:
+            frame = next(self.stream)
+        except:
+            logger.exception('Failed to read next frame')
+            self.open_input(self.source)
         self.new_frame(frame, q, status)
 
     def new_frame(self, frame, q, status):
@@ -63,6 +67,8 @@ class Vision(object):
         # Save a screenshot if the user presses SPACEBAR on the window
         if key == 32:
             cv2.imwrite(f'img_{time.time()}.jpg', image)
+        if key == ord('p'):
+            cv2.waitKey()
         # Recalculate frame skip depending on how fast we're going
         if frame.time_base < 1.0/60:
             time_base = 1.0/60
@@ -154,33 +160,44 @@ def process(q, frame, status):
     return results
 
 
-CONTOUR_MIN_AREA = 1000
-#BALLOON_CENTER_DIAMETER_CM = 33.422  # circ 105cm
-BALLOON_CENTER_DIAMETER_CM = 21  # circ 105cm
+CONTOUR_MIN_AREA = 2500
+BALLOON_CENTER_DIAMETER_CM = 26.7
 #FOCAL_LENGTH_PX = 711  # curve fit result
 FOCAL_LENGTH_PX = 904  # camera calibration result
 CENTER_X = 480
 CENTER_Y = 150
+BIG_RATIO = 0.15
 def track_balloon(thresh, debug, color):
     # Find contours in binary image
     contours, hierarchy = cv2.findContours(
             thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(debug, contours, -1, color, 1)
     # Filtering
-    filtered = filter(lambda c: len(c) > 5, contours)
+    filtered = iter(contours)
+#    filtered = filter(lambda c: len(c) > 5, contours)
     # Remove small contours
     filtered = filter(lambda c: cv2.contourArea(c) > CONTOUR_MIN_AREA, filtered)
     # Remove contours that don't look like a balloon
     def is_like_balloon(contour):
+        contour_area = cv2.contourArea(contour)
+        # If the balloon is really close (big), pass all these tests automatically
+        if (contour_area / (thresh.shape[0]*thresh.shape[1])) > BIG_RATIO:
+            return True
+        # fitEllipse needs 5 points
+        if len(contour) < 5:
+            return False
         rect = cv2.fitEllipse(contour)
         center, size, angle = rect
         # Check that the ellipse is close-ish to a circle
-        if max(size)/min(size) - 1 > 0.5:
+        circle_ratio = max(size)/min(size) - 1
+        if circle_ratio > 0.5:
+            cv2.putText(debug, f"Fail C {circle_ratio}", (int(center[0]),int(center[1])), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
             return False
         # Check that ellipse well fits the contour
         ellipse_area = np.pi * size[0] * size[1] / 4
-        contour_area = cv2.contourArea(contour)
-        if abs(ellipse_area/contour_area - 1) > 0.25:
+        ellipse_ratio = abs(ellipse_area/contour_area - 1)
+        if ellipse_ratio > 0.5:
+            cv2.putText(debug, f"Fail E {ellipse_ratio}", (int(center[0]),int(center[1])), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
             return False
         return True
     filtered = filter(is_like_balloon, filtered)
@@ -199,24 +216,32 @@ def track_balloon(thresh, debug, color):
         xrot = x / thresh.shape[1] * 82.6
         yrot = y / thresh.shape[0] * 82.6
         # find distance to target
-        rect = cv2.fitEllipse(contour)
-        box = cv2.boxPoints(rect)
-        box = np.int0(box)
-        center, size, angle = rect
-        ellipse_area = np.pi * size[0] * size[1] / 4
-        minoraxis = min(size)  # need a good shot of the balloon for this to make sense
-        distance = (BALLOON_CENTER_DIAMETER_CM * FOCAL_LENGTH_PX) / minoraxis
-        # find the height of the balloon (center vs camera center)
-        height = distance * np.sin(yrot * np.pi/180)
+        if len(contour) >= 5:
+            rect = cv2.fitEllipse(contour)
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            center, size, angle = rect
+            ellipse_area = np.pi * size[0] * size[1] / 4
+            minoraxis = min(size)  # need a good shot of the balloon for this to make sense
+            distance = (BALLOON_CENTER_DIAMETER_CM * FOCAL_LENGTH_PX) / minoraxis
+            # find the height of the balloon (center vs camera center)
+            height = distance * np.sin(yrot * np.pi/180)
+        else:
+            # balloon is probably full screen
+            box = None
+            distance = 0.1
+            height = 0.0
 
         if debug is not None:
             cv2.line(debug, (0, CENTER_Y), (debug.shape[1]-1, CENTER_Y), (255,0,255), 1)
             cv2.line(debug, (CENTER_X, 0), (CENTER_X, debug.shape[0]-1), (255,0,255), 1)
             cv2.drawContours(debug, [contour], 0, color, 3)
-            cv2.drawContours(debug, [box], 0, (127,0,127), 1)
+            if box is not None:
+                cv2.drawContours(debug, [box], 0, (127,0,127), 1)
             cv2.putText(debug, f"XR {xrot:.1f}deg", (cx-50,cy-20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
             cv2.putText(debug, f"D {distance:.1f}cm", (cx-50,cy), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
             cv2.putText(debug, f"H {height:.1f}cm", (cx-50,cy+20), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
+            cv2.putText(debug, f"CA {contour_area}", (cx-50,cy+40), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
 #            cv2.putText(debug, f"AR {ellipse_area/contour_area:.4f}", (cx-50,cy+40), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
 #            cv2.putText(debug, f"Rd {max(size)/min(size):.4f}", (cx-50,cy+40), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,0,255))
 
