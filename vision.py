@@ -33,15 +33,15 @@ class Vision(object):
                 logger.exception('Failed to open input')
         self.stream = self.container.decode(video=0)
 
-    def check_new_frame(self, q, status):
+    def check_new_frame(self, q, status, **kwargs):
         try:
             frame = next(self.stream)
         except:
             logger.exception('Failed to read next frame')
             self.open_input(self.source)
-        self.new_frame(frame, q, status)
+        self.new_frame(frame, q, status, **kwargs)
 
-    def new_frame(self, frame, q, status):
+    def new_frame(self, frame, q, status, waitkey=True):
         if 0 < self.frame_skip:
             self.frame_skip = self.frame_skip - 1
             return
@@ -59,16 +59,17 @@ class Vision(object):
         except queue.Full:
             pass
 
-        key = cv2.waitKey(1) & 0xFF
-        # Quit early if user presses ESC on the window
-        if key == 27:
-            q.get(block=False)
-            q.put({'type': 'quit'}, timeout=5)
-        # Save a screenshot if the user presses SPACEBAR on the window
-        if key == 32:
-            cv2.imwrite(f'img_{time.time()}.jpg', image)
-        if key == ord('p'):
-            cv2.waitKey()
+        if waitkey:
+            key = cv2.waitKey(1) & 0xFF
+            # Quit early if user presses ESC on the window
+            if key == 27:
+                q.get(block=False)
+                q.put({'type': 'quit'}, timeout=5)
+            # Save a screenshot if the user presses SPACEBAR on the window
+            if key == 32:
+                cv2.imwrite(f'img_{time.time()}.jpg', image)
+            if key == ord('p'):
+                cv2.waitKey()
         # Recalculate frame skip depending on how fast we're going
         if frame.time_base < 1.0/60:
             time_base = 1.0/60
@@ -115,8 +116,8 @@ def process(q, frame, status):
 #    threshY = cv2.inRange(hsv, (25-10, 150, 150), (25+10, 255, 255))
     #DUC
     threshR = cv2.bitwise_or(
-            cv2.inRange(hsv, (0, 150, 100), (10, 255, 255)),
-            cv2.inRange(hsv, (160, 150, 100), (180, 255, 255)))
+            cv2.inRange(hsv, (0, 150, 90), (10, 255, 255)),
+            cv2.inRange(hsv, (160, 150, 90), (180, 255, 255)))
     threshG = cv2.inRange(hsv, (38, 50, 104), (72, 255, 255))
     threshB = cv2.inRange(hsv, (102, 150, 100), (119, 255, 255))
     threshY = cv2.inRange(hsv, (25, 150, 119), (34, 255, 255))

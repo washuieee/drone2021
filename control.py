@@ -62,24 +62,30 @@ def statusmessageui(message):
 
 
 def handlaunchui(drone):
+    global v, q
     display = np.ones((230, 700, 3), dtype=np.uint8)*255
     cv2.putText(display, "Place the drone in the palm on your hand, then", (40,40), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
     cv2.putText(display, "press SPACEBAR when ready.", (40,80), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
     cv2.putText(display, "After the propellers start,", (40,120), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
     cv2.putText(display, "toss the drone up.", (40,160), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
-    cv2.imshow('Display', display)
-    key = cv2.waitKey()
-    if key == 32:
-        drone.throw_and_go()
-        display = np.ones((230, 700, 3), dtype=np.uint8)*255
-        cv2.putText(display, "After the propellers start,", (40,40), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
-        cv2.putText(display, "toss the drone up.", (40,80), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
-        cv2.putText(display, f"Do this within 5 seconds!", (40,120), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
-        cv2.imshow('Display', display)
-        cv2.waitKey(1)
-        time.sleep(5)
-    else:
-        raise Exception("Early quit")
+    cv2.imshow('UI', display)
+    while True:
+        key = cv2.waitKey(1)
+        if key == 32:
+            drone.throw_and_go()
+            display = np.ones((230, 700, 3), dtype=np.uint8)*255
+            cv2.putText(display, "After the propellers start,", (40,40), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
+            cv2.putText(display, "toss the drone up.", (40,80), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
+            cv2.putText(display, f"Do this within 5 seconds!", (40,120), cv2.FONT_HERSHEY_COMPLEX, 1, (255,0,255))
+            cv2.imshow('UI', display)
+            cv2.waitKey(1)
+            dronesleep(5)
+            cv2.destroyWindow('UI')
+            break
+        elif key == 27:
+            raise Exception("Early quit")
+
+        droneclear(waitkey=False)
 
 
 class FinalAttackState(enum.Enum):
@@ -90,8 +96,24 @@ class FinalAttackState(enum.Enum):
 
 status = None
 DEFAULT_RESTING_HEIGHT = 6
+v = None
+q = None
+
+def droneclear(**kwargs):
+    global v, q
+    if q.full():
+        q.get()
+    v.check_new_frame(q, str(status), **kwargs)
+
+def dronesleep(t, **kwargs):
+    global v, q
+    expiry = time.time() + t
+    while time.time() < expiry:
+        v.check_new_frame(q, str(status), **kwargs)
+    droneclear()
 
 def droneloop():
+    global v, q
     logging.basicConfig(filename=f"{time.time()}.txt", filemode='w',
             level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
     logger = logging.getLogger(__name__)
@@ -125,31 +147,18 @@ def droneloop():
         drone.wait_for_connection(60.0)
 
         logger.info("Connected to drone")
-        statusmessageui("Connected to drone!")
-        handlaunchui(drone)
-        logger.info("Hand launch completed")
         statusmessageui("Video feed starting...")
-
 
         v = vision.Vision(record=True)
         q = queue.Queue(maxsize=1)
         v.open_input(drone.get_video_stream())
 
-       
-        def droneclear():
-            if q.full():
-                q.get()
-            v.check_new_frame(q, str(status))
-
-        def dronesleep(t):
-            expiry = time.time() + t
-            while time.time() < expiry:
-                v.check_new_frame(q, str(status))
-            droneclear()
-
         # Wait for video to stabilize
         dronesleep(10)
         logger.info("Vision presumed stable")
+
+        handlaunchui(drone)
+        logger.info("Hand launch completed")
 
         last_xrot = 0
         final_state = None
